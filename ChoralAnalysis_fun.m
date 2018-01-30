@@ -14,9 +14,10 @@ filePath = '../midi';
 fileName = 'mz_545_1_noRepeat';
 [midiData, timeSig]  = midi_Preprocess(fileName);
 
-
 midiData = normalize_midi_data(midiData);
 
+% each bar's information
+[barNote, barStart] = bar_note_data(midiData, timeSig);
 
 % 大小調
 keyChord = make_key_chord;
@@ -26,19 +27,19 @@ tempName    = {'maj','7','min','dim','xxx','X'};%,'Fully dim7','Half dim7','dim3
 pitchName   = {'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'};
 keyName     = {'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B', ...
                'c', 'c#', 'd', 'd#', 'e', 'f', 'f#', 'g', 'g#', 'a', 'a#', 'b'};
-%                   大三        屬七         小三       減
-template    = [ 0,4,7,-1;  0,4,7,10;   0,3,7,-1; 0,3,6,-1];  
-eva_i= 1;
+%                 大三        屬七         小三       減
+template    = [ 0,4,7,-1; 0,4,7,10; 0,3,7,-1; 0,3,6,-1];  
+evaI = 1;
 evaChord = {'小節','拍數(onset)','調性','和弦名稱','和弦編號','備註'};% new
 
 
 
 
 %%%%%%%%%%% 加修改的方法 %%%%%%%%%%
-IsdownBeatAndDurWeight      = 0;
-IsLowWeight                 = 0;
-IsdownBeatWeight            = 0;
-IsSave                      = 1;
+isDownbeatAndDurWeight      = 0;
+isLowWeight                 = 0;
+isDownbeatWeight            = 0;
+isSave                      = 1;
 ratio                       = 1;
 
 
@@ -47,45 +48,49 @@ for j = 1:length(barNote)
     noteBar = barNote{j};
     
     % 找到最小片段分割點有哪些音
-    [pitchClass, miniSeg] = miniSegPitchClass(noteBar, barStart(j));   
-    if IsdownBeatAndDurWeight
-        [pitchClass, lowestPClass, lowestP, miniSeg] = downBeatPitchClass(noteBar, barStart(j), IsdownBeatWeight, ratio);
+    [pitchClass, miniSeg] = min_seg_pitchclass(noteBar, barStart(j));   
+    if isDownbeatAndDurWeight
+        [pitchClass, lowestPClass, lowestP, miniSeg] = downbeat_pitchclass(noteBar, barStart(j), isDownbeatWeight, ratio);
     end
     %% 紀錄所有可能分段的分數 
-%     [maxScoreMatrix, SM_idx, scoreMatrix] = recordScore(pitchClass);    
+%     [maxScoreMatrix, scoreMatrixIdx, scoreMatrix] = record_min_seg_score(pitchClass);    
 
-    tempNUM           = size(template,1);
-    partitionNum      = size(pitchClass,1)+1;
-    rootS  = -inf*ones(partitionNum, partitionNum, tempNUM*12);
-    P      = -inf*ones(partitionNum, partitionNum, tempNUM*12);
-    N      = -inf*ones(partitionNum, partitionNum, tempNUM*12);
-    M      = -inf*ones(partitionNum, partitionNum, tempNUM*12);
-    S      = -inf*ones(partitionNum, partitionNum, tempNUM*12);
+    templateNum  = size(template, 1);
+    partitionNum = size(pitchClass, 1) + 1;
+    rootS  = -inf * ones(partitionNum, partitionNum, templateNum * 12);
+    P      = -inf * ones(partitionNum, partitionNum, templateNum * 12);
+    N      = -inf * ones(partitionNum, partitionNum, templateNum * 12);
+    M      = -inf * ones(partitionNum, partitionNum, templateNum * 12);
+    S      = -inf * ones(partitionNum, partitionNum, templateNum * 12);
     
-    lowP   = zeros(partitionNum, partitionNum, tempNUM*12);
-    lowN   = -inf*ones(partitionNum, partitionNum, tempNUM*12);
+    lowestPitchP = zeros(partitionNum, partitionNum, templateNum * 12);
+    lowestPitchN = -inf * ones(partitionNum, partitionNum, templateNum * 12);
 
     
-     for ii=1:partitionNum
-         for jj=ii+1:partitionNum             
-             if IsLowWeight && min(lowestP(ii:jj-1,1))~=Inf
-                minIdx = find(lowestP==min(lowestP(ii:jj-1,1)));
+     for ii = 1:partitionNum
+         for jj = ii+1:partitionNum             
+             if isLowWeight && min(lowestP(ii:jj-1, 1)) ~= Inf
+                lowestPitchIdx = find(lowestP == min(lowestP(ii:jj-1, 1)));
              end
-             for kk=1:tempNUM
+             for kk = 1:templateNum
                  for p = 1:12
-                     temp     = mod(template(kk,(template(kk,:)~=-1)) + p - 1 , 12);
-                     Template = zeros(1,12); Template(1,temp + 1) = 1;
-                     rootS(ii,jj,(kk-1)*12+p) = sum(sum(pitchClass(ii:jj-1,temp(1)+1)));                 % 根音的score
-                     P(ii,jj,(kk-1)*12+p)     = sum(sum(pitchClass(ii:jj-1,temp+1  )));                  % 片段 有, 和弦 有
-                     N(ii,jj,(kk-1)*12+p)     = sum(sum(pitchClass(ii:jj-1,setdiff(1:12,temp+1)  )));    % 片段 有, 和弦沒有  
+                     templateNo = mod(template(kk,(template(kk,:)~=-1)) + p - 1 , 12);
+                     Template = zeros(1,12); 
+                     Template(1,templateNo + 1) = 1;
+                     
+                     rootS(ii, jj, (kk - 1) * 12 + p) = sum(sum(pitchClass(ii:jj-1, templateNo(1) + 1)));                 % 根音的score
+                     P(ii, jj, (kk - 1) * 12 + p)     = sum(sum(pitchClass(ii:jj-1, templateNo + 1)));                  % 片段 有, 和弦 有
+                     N(ii, jj, (kk - 1) * 12 + p)     = sum(sum(pitchClass(ii:jj-1, setdiff(1:12,templateNo+1))));    % 片段 有, 和弦沒有  
 %                      N(ii,jj,(kk-1)*12+p)     = sum(sum(pitchClass(ii:jj-1,:)))-P(ii,jj,(kk-1)*12+p);    % 片段 有, 和弦沒有
-                     M(ii,jj,(kk-1)*12+p)     = sum((sum(pitchClass(ii:jj-1,:),1)==0).*Template);        % 片段沒有, 和弦 有
-                     S(ii,jj,(kk-1)*12+p)     = P(ii,jj,(kk-1)*12+p) - ( N(ii,jj,(kk-1)*12+p) + M(ii,jj,(kk-1)*12+p) );
+                     M(ii, jj, (kk - 1) * 12 + p)     = sum((sum(pitchClass(ii:jj-1, :),1) == 0) .* Template);        % 片段沒有, 和弦 有
+                     S(ii, jj, (kk - 1) * 12 + p)     = ...
+                         P(ii, jj, (kk - 1) * 12 + p) - (N(ii, jj, (kk - 1) * 12 + p) + M(ii, jj, (kk-1) * 12 + p));
                      %%%%% 加最低音weight %%%%%%
-                     if  IsLowWeight && min(lowestP(ii:jj-1,1))~=Inf
-                         lowP(ii,jj,(kk-1)*12+p)  = sum(sum(lowestPClass(minIdx,temp+1)));
-                         lowN(ii,jj,(kk-1)*12+p)  = sum(sum(lowestPClass(minIdx,setdiff(1:12,temp+1))));
-                          S(ii,jj,(kk-1)*12+p) = S(ii,jj,(kk-1)*12+p) + lowP(ii,jj,(kk-1)*12+p) - lowN(ii,jj,(kk-1)*12+p);
+                     if  isLowWeight && min(lowestP(ii:jj-1, 1)) ~= Inf
+                         lowestPitchP(ii, jj, (kk - 1) * 12 + p)  = sum(sum(lowestPClass(lowestPitchIdx, templateNo + 1)));
+                         lowestPitchN(ii, jj, (kk - 1) * 12 + p)  = sum(sum(lowestPClass(lowestPitchIdx, setdiff(1:12, templateNo + 1))));
+                         S(ii, jj, (kk - 1) * 12 + p) = S(ii, jj, (kk - 1) * 12 + p) + ...
+                             lowestPitchP(ii, jj, (kk - 1) * 12 + p) - lowestPitchN(ii, jj, (kk - 1) * 12 + p);
                      end
                      %%%%%%%%%%%%%%%%%%%%%%%%%%
                  end
@@ -93,7 +98,7 @@ for j = 1:length(barNote)
          end
      end
 
-    [maxScoreMatrix,SM_idx] = max(S,[],3);
+    [maxScoreMatrix, scoreMatrixIdx ] = max(S, [], 3);
 
     %% 分段：最佳路徑演算法 HarmAn
     % &&&&&&&&&&& .   downbeat  &&&&&&&&&&&&&&
@@ -114,7 +119,7 @@ for j = 1:length(barNote)
     Wtmp = 0;
     Stmp = 0;
     for k = 2:length(MARK)
-        Ans.Chord{j,k-1}       = SM_idx(MARK(k-1),MARK(k));
+        Ans.Chord{j,k-1}       = scoreMatrixIdx(MARK(k-1),MARK(k));
         Ans.sameScore(j,k-1)   = {''};
         Ans.Score(j,k-1)       = maxScoreMatrix(MARK(k-1),MARK(k));
 
@@ -158,11 +163,11 @@ for j = 1:length(barNote)
         Ans.pitch_no{j,k-1}  = ~(ceil(mod(Ans.Chord{j,k-1},12)/12))*12 + mod(Ans.Chord{j,k-1},12);
         Ans.ChordName{j,k-1} = strcat(pitchName(Ans.pitch_no{j,k-1}),':',tempName(Ans.templ_no(j,k-1)));
         
-        eva_i = eva_i + 1;
-        evaChord{eva_i,1} = j;
-        evaChord{eva_i,2} = segOnset(MARK(k-1));
-        evaChord(eva_i,4) = Ans.ChordName{j,k-1};
-        evaChord{eva_i,5} = HighScoreChord;
+        evaI = evaI + 1;
+        evaChord{evaI,1} = j;
+        evaChord{evaI,2} = segOnset(MARK(k-1));
+        evaChord(evaI,4) = Ans.ChordName{j,k-1};
+        evaChord{evaI,5} = HighScoreChord;
         
 
     end
@@ -225,7 +230,7 @@ for j = 1:length(barNote)
     %}
 end
 
-if IsSave
+if isSave
     cell2csv(['chordEva/eva_' fileName '.csv'], evaChord)
 end
 
@@ -235,7 +240,7 @@ end
 %% function 
 
 
-function [barNote, barSTART] = BarInfo(midiData, timeSig)
+function [barNote, barSTART] = bar_note_data(midiData, timeSig)
 % %               1    2    4+8    4+16     4    8+16      8      16    
 % noteValue   = [ 1; 0.5; 0.375; 0.3125; 0.25; 0.1875; 0.125; 0.0625 ];
 % nearDur         = dsearchn(noteValue, Note{bar_i}(:,2)/2^timeSig(1,2));
@@ -319,7 +324,7 @@ end
 %         miniSeg      -> 每個minSeg之onset offset的beat
 % 找左手最低音權重較大，難以分辨左右手，所以找片段最低音且同時有兩個音
 
-function [pitchClass, lowestPitchC, lowestP, miniSeg] = downBeatPitchClass(noteBar, barStart, IsdownBeatWeight,ratio)
+function [pitchClass, lowestPitchC, lowestP, miniSeg] = downbeat_pitchclass(noteBar, barStart, isDownbeatWeight,ratio)
 
 
 % &&&&&&&&&&& .   downbeat  &&&&&&&&&&&&&&
@@ -342,20 +347,20 @@ function [pitchClass, lowestPitchC, lowestP, miniSeg] = downBeatPitchClass(noteB
            
             On(note)  = round(noteBar(note,1)-barStart,4);
             Off(note) = round(sum(noteBar(note,1:2))-barStart,4);
-            onsetCut  = 0; % IsdownBeatWeight
+            onsetCut  = 0; % isDownbeatWeight
             if On(note) < miniSeg(P,1)
-                onsetCut = miniSeg(P,1)-On(note);  % IsdownBeatWeight
+                onsetCut = miniSeg(P,1)-On(note);  % isDownbeatWeight
                 On(note) = miniSeg(P,1); 
             end
             if Off(note)> miniSeg(P,2); Off(note)= miniSeg(P,2); end
                         
-            onCutFlag(note) = (onsetCut == fix(onsetCut)); % IsdownBeatWeight
+            onCutFlag(note) = (onsetCut == fix(onsetCut)); % isDownbeatWeight
 
             if  Off(note)-On(note)>0   % 每個音有沒有落在此minSeg內
                 pitchNo = mod(noteBar(note,4),12)+1;
                 pitchClass(P,pitchNo) = pitchClass(P,pitchNo) + Off(note)-On(note);
                 
-                if IsdownBeatWeight && On(note) == fix(On(note)) && onCutFlag(note)
+                if isDownbeatWeight && On(note) == fix(On(note)) && onCutFlag(note)
                     pitchClass(P,pitchNo) = pitchClass(P,pitchNo) + Off(note)-On(note);
                 end
                 % 音on和off是佔minSeg內的哪些unit
@@ -374,7 +379,7 @@ function [pitchClass, lowestPitchC, lowestP, miniSeg] = downBeatPitchClass(noteB
                 lowestP(P)  = min(lowestPitch(lowestFlag>1));
                 lowIDX      = find(lowestPitch==lowestP(P));
                 lowNUM      = numel(lowIDX);
-                if IsdownBeatWeight
+                if isDownbeatWeight
                     weight      = 0;
                     intSect     = intersect(lowestNO, find(onCutFlag==1));
                     for inS = 1:length(intSect)
@@ -391,7 +396,7 @@ function [pitchClass, lowestPitchC, lowestP, miniSeg] = downBeatPitchClass(noteB
     miniSeg = miniSeg + barStart;
 end
 
-function [pitchClass, miniSeg] = miniSegPitchClass(noteBar, barStart)
+function [pitchClass, miniSeg] = min_seg_pitchclass(noteBar, barStart)
 % &&&&&&&&&&& .   downbeat  &&&&&&&&&&&&&&
 % %     beatInBar = noteBar(:,9);
 % % %     miniSeg = [[0:beatInBar-1]' [1:beatInBar]'];
@@ -422,25 +427,25 @@ function [pitchClass, miniSeg] = miniSegPitchClass(noteBar, barStart)
     end
 end
 
-function [maxScoreMatrix, I, S] = recordScore(pitchClass)
+function [maxScoreMatrix, I, S] = record_min_seg_score(pitchClass)
     %                            大三        屬七         小三       減
     template            = [ 0,4,7,-1;  0,4,7,10;   0,3,7,-1; 0,3,6,-1];  
-    tempNUM             = size(template,1);
+    templateNum             = size(template,1);
     partitionNum      = size(pitchClass,1)+1;
-     rootS  = -inf*ones(partitionNum, partitionNum, tempNUM*12);
-     P      = -inf*ones(partitionNum, partitionNum, tempNUM*12);
-     N      = -inf*ones(partitionNum, partitionNum, tempNUM*12);
-     M      = -inf*ones(partitionNum, partitionNum, tempNUM*12);
-     S      = -inf*ones(partitionNum, partitionNum, tempNUM*12);
+     rootS  = -inf*ones(partitionNum, partitionNum, templateNum*12);
+     P      = -inf*ones(partitionNum, partitionNum, templateNum*12);
+     N      = -inf*ones(partitionNum, partitionNum, templateNum*12);
+     M      = -inf*ones(partitionNum, partitionNum, templateNum*12);
+     S      = -inf*ones(partitionNum, partitionNum, templateNum*12);
 
      for ii=1:partitionNum
          for jj=ii+1:partitionNum
-            for kk=1:tempNUM
+            for kk=1:templateNum
                 for p = 1:12
-                    temp = mod(template(kk,(template(kk,:)~=-1)) + p - 1 , 12);
-                    Template = zeros(1,12); Template(1,temp + 1) = 1;
-                    rootS(ii,jj,(kk-1)*12+p) = sum(sum(pitchClass(ii:jj-1,temp(1)+1))); % 根音的score
-                    P(ii,jj,(kk-1)*12+p)     = sum(sum(pitchClass(ii:jj-1,temp+1  )));                  % 片段 有, 和弦 有
+                    templateNo = mod(template(kk,(template(kk,:)~=-1)) + p - 1 , 12);
+                    Template = zeros(1,12); Template(1,templateNo + 1) = 1;
+                    rootS(ii,jj,(kk-1)*12+p) = sum(sum(pitchClass(ii:jj-1,templateNo(1)+1))); % 根音的score
+                    P(ii,jj,(kk-1)*12+p)     = sum(sum(pitchClass(ii:jj-1,templateNo+1  )));                  % 片段 有, 和弦 有
                     N(ii,jj,(kk-1)*12+p)     = sum(sum(pitchClass(ii:jj-1,:)))-P(ii,jj,(kk-1)*12+p);    % 片段 有, 和弦沒有            
                     M(ii,jj,(kk-1)*12+p)     = sum((sum(pitchClass(ii:jj-1,:),1)==0).*Template);        % 片段沒有, 和弦 有
                     S(ii,jj,(kk-1)*12+p)     = P(ii,jj,(kk-1)*12+p) - ( N(ii,jj,(kk-1)*12+p) + M(ii,jj,(kk-1)*12+p) );
@@ -473,18 +478,14 @@ end
 % desciption: 將midi的duration(unit:beat)正規化成跟譜一樣
 % input     : midiData           -> 原始   的midi data
 % output    : normalizedMidiData -> 正規化後的midi data
-function [normalizedMidiData] = normalize_midi_data (midiData)
-
+function [midiData] = normalize_midi_data (midiData)
     %                  1    2    4+8    4+16     4    8+16      8      16    
     noteValue       = [1  0.5  0.375  0.3125  0.25  0.1875  0.125  0.0625];
     repNoteValue    = repmat(noteValue, length(midiData), 1);
     tmp             = midiData(:, 2) - floor(midiData(:, 2)) - repNoteValue; 
     tmp(tmp > 0)    = -10;
     [~,idx]         = max(tmp, [], 2);
-    normalizedMidiData(:,2) = noteValue(idx)' + floor(midiData(:,2));
+    midiData(:,2) = noteValue(idx)' + floor(midiData(:,2));
     % nearDur         = dsearchn(newNoteValue, normalizedMidiData(:,2)-floor(normalizedMidiData(:,2)));
     % W_dur           = noteValue(nearDur) + floor(normalizedMidiData(:,2)); 
-
-    % each bar's information
-    [barNote, barStart] = BarInfo(normalizedMidiData, timeSig);
 end
