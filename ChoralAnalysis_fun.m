@@ -17,7 +17,7 @@ fileName = 'mz_545_1_noRepeat';
 midiData = normalize_midi_data(midiData);
 
 % each bar's information
-[barNote, barStart] = bar_note_data(midiData, timeSig);
+[barNote, barOnset] = bar_note_data(midiData, timeSig);
 
 % 大小調
 keyChord = make_key_chord;
@@ -29,18 +29,17 @@ keyName     = {'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B', 
                'c', 'c#', 'd', 'd#', 'e', 'f', 'f#', 'g', 'g#', 'a', 'a#', 'b'};
 %                 大三        屬七         小三       減
 template    = [ 0,4,7,-1; 0,4,7,10; 0,3,7,-1; 0,3,6,-1];  
-evaI = 1;
-evaChord = {'小節','拍數(onset)','調性','和弦名稱','和弦編號','備註'};% new
+evaluationIdx = 1;
+evaluationChord = {'小節','拍數(onset)','調性','和弦名稱','和弦編號','備註'};% new
 
 
 
 
 %%%%%%%%%%% 加修改的方法 %%%%%%%%%%
-isDownbeatAndDurWeight      = 0;
-isLowWeight                 = 0;
+isDownbeatAndDurWeight      = 1;
+isLowWeight                 = 1;
 isDownbeatWeight            = 0;
-isSave                      = 1;
-ratio                       = 1;
+isSave                      = 0;
 
 
 for j = 1:length(barNote)
@@ -48,9 +47,9 @@ for j = 1:length(barNote)
     noteBar = barNote{j};
     
     % 找到最小片段分割點有哪些音
-    [pitchClass, miniSeg] = min_seg_pitchclass(noteBar, barStart(j));   
+    [pitchClass, minSeg] = min_seg_pitchclass(noteBar, barOnset(j));   
     if isDownbeatAndDurWeight
-        [pitchClass, lowestPClass, lowestP, miniSeg] = downbeat_pitchclass(noteBar, barStart(j), isDownbeatWeight, ratio);
+        [pitchClass, lowestPClass, lowestP, minSeg] = downbeat_pitchclass(noteBar, barOnset(j), isDownbeatWeight);
     end
     %% 紀錄所有可能分段的分數 
 %     [maxScoreMatrix, scoreMatrixIdx, scoreMatrix] = record_min_seg_score(pitchClass);    
@@ -58,7 +57,7 @@ for j = 1:length(barNote)
     templateNum  = size(template, 1);
     partitionNum = size(pitchClass, 1) + 1;
     rootS  = -inf * ones(partitionNum, partitionNum, templateNum * 12);
-    P      = -inf * ones(partitionNum, partitionNum, templateNum * 12);
+    s      = -inf * ones(partitionNum, partitionNum, templateNum * 12);
     N      = -inf * ones(partitionNum, partitionNum, templateNum * 12);
     M      = -inf * ones(partitionNum, partitionNum, templateNum * 12);
     S      = -inf * ones(partitionNum, partitionNum, templateNum * 12);
@@ -79,12 +78,12 @@ for j = 1:length(barNote)
                      Template(1,templateNo + 1) = 1;
                      
                      rootS(ii, jj, (kk - 1) * 12 + p) = sum(sum(pitchClass(ii:jj-1, templateNo(1) + 1)));                 % 根音的score
-                     P(ii, jj, (kk - 1) * 12 + p)     = sum(sum(pitchClass(ii:jj-1, templateNo + 1)));                  % 片段 有, 和弦 有
+                     s(ii, jj, (kk - 1) * 12 + p)     = sum(sum(pitchClass(ii:jj-1, templateNo + 1)));                  % 片段 有, 和弦 有
                      N(ii, jj, (kk - 1) * 12 + p)     = sum(sum(pitchClass(ii:jj-1, setdiff(1:12,templateNo+1))));    % 片段 有, 和弦沒有  
-%                      N(ii,jj,(kk-1)*12+p)     = sum(sum(pitchClass(ii:jj-1,:)))-P(ii,jj,(kk-1)*12+p);    % 片段 有, 和弦沒有
+%                      N(ii,jj,(kk-1)*12+p)     = sum(sum(pitchClass(ii:jj-1,:)))-s(ii,jj,(kk-1)*12+p);    % 片段 有, 和弦沒有
                      M(ii, jj, (kk - 1) * 12 + p)     = sum((sum(pitchClass(ii:jj-1, :),1) == 0) .* Template);        % 片段沒有, 和弦 有
                      S(ii, jj, (kk - 1) * 12 + p)     = ...
-                         P(ii, jj, (kk - 1) * 12 + p) - (N(ii, jj, (kk - 1) * 12 + p) + M(ii, jj, (kk-1) * 12 + p));
+                         s(ii, jj, (kk - 1) * 12 + p) - (N(ii, jj, (kk - 1) * 12 + p) + M(ii, jj, (kk-1) * 12 + p));
                      %%%%% 加最低音weight %%%%%%
                      if  isLowWeight && min(lowestP(ii:jj-1, 1)) ~= Inf
                          lowestPitchP(ii, jj, (kk - 1) * 12 + p)  = sum(sum(lowestPClass(lowestPitchIdx, templateNo + 1)));
@@ -102,72 +101,59 @@ for j = 1:length(barNote)
 
     %% 分段：最佳路徑演算法 HarmAn
     % &&&&&&&&&&& .   downbeat  &&&&&&&&&&&&&&
-    MARK = HarmAn(maxScoreMatrix, partitionNum);
+    optimalPath = HarmAn(maxScoreMatrix, partitionNum);
 
 %     partitionNum      = size(pitchClass,1)+1;
-%     downbeat          = find(miniSeg(:,1)==fix(miniSeg(:,1)));
-%     MARK = HarmAn(maxScoreMatrix, partitionNum, [downbeat; partitionNum]);
+%     downbeat          = find(minSeg(:,1)==fix(minSeg(:,1)));
+%     optimalPath = HarmAn(maxScoreMatrix, partitionNum, [downbeat; partitionNum]);
     % &&&&&&&&&&& .   downbeat  &&&&&&&&&&&&&&
 
     % 紀錄 最佳路徑的onset
-    segOnset = [miniSeg(:,1)'-barStart(j), miniSeg(end,2)-barStart(j)];
+    segOnset = [minSeg(:,1)' - barOnset(j), minSeg(end,2) - barOnset(j)];
 
-    Ans.Mark    (j,1:length(MARK)) = MARK;
-    Ans.segOnset(j,1:length(MARK)) = segOnset(MARK);
+    Ans.optimalPath(j, 1:length(optimalPath)) = optimalPath;
+    Ans.segOnset(j, 1:length(optimalPath)) = segOnset(optimalPath);
 
     %% 最佳路徑的和弦標記
-    Wtmp = 0;
-    Stmp = 0;
-    for k = 2:length(MARK)
-        Ans.Chord{j,k-1}       = scoreMatrixIdx(MARK(k-1),MARK(k));
-        Ans.sameScore(j,k-1)   = {''};
-        Ans.Score(j,k-1)       = maxScoreMatrix(MARK(k-1),MARK(k));
-
-        Wtmp                   = Wtmp + maxScoreMatrix(MARK(k-1),MARK(k));
-        Stmp                   = Stmp + maxScoreMatrix(MARK(k-1),MARK(k)) * diff(miniSeg(k-1,:))/(miniSeg(end,end)-miniSeg(1,1));
-
-        if k == length(MARK)
-            Ans.ScoreSum(j,1) = Wtmp;                   % 小節和弦總分數
-            Ans.ScorePar(j,1) = Wtmp/partitionNum;      % 小節和弦平均分數
-            Ans.ScoreLen(j,1) = Stmp;                   % 
-            Ans.ScoreLenPar(j,1) = Ans.ScoreLen(j,1)/partitionNum;
-        end
-
+    for k = 2:length(optimalPath)
+        Ans.chord{j,k-1}       = scoreMatrixIdx(optimalPath(k-1),optimalPath(k));
+        Ans.tieBreaking(j,k-1) = {''};
+        Ans.score(j,k-1)       = maxScoreMatrix(optimalPath(k-1),optimalPath(k));
 
         %% 分數一樣的話
-        HighScoreChord = find(S(MARK(k-1),MARK(k),:)==maxScoreMatrix(MARK(k-1),MARK(k)));
+        highScoreChord = find(S(optimalPath(k - 1), optimalPath(k), :) == maxScoreMatrix(optimalPath(k - 1), optimalPath(k)));
         % step 1 : highest root scoreMatrix
-        if numel(unique(HighScoreChord))~=1
-            HighScoreRootScore  = rootS(MARK(k-1),MARK(k),HighScoreChord);
-            MaxRootIdx          = find(HighScoreRootScore==max(HighScoreRootScore));
-            HighScoreChord      = HighScoreChord(MaxRootIdx);
+        if numel(unique(highScoreChord)) ~= 1
+            highScoreRootScore  = rootS(optimalPath(k-1), optimalPath(k), highScoreChord);
+            maxRootIdx          = find(highScoreRootScore == max(highScoreRootScore));
+            highScoreChord      = highScoreChord(maxRootIdx);
             step                = {'root'};
             % step 2 : highest probability of occurrence
-            if numel(unique(HighScoreChord))~=1
-                chordSpecies    = floor(HighScoreChord/12)+1;
-                MaxProbIdx      = find(chordSpecies==min(chordSpecies));
-                HighScoreChord  = HighScoreChord(MaxProbIdx); 
+            if numel(unique(highScoreChord))~=1
+                chordSpecies    = floor(highScoreChord / 12) + 1;
+                maxProbIdx      = find(chordSpecies == min(chordSpecies));
+                highScoreChord  = highScoreChord(maxProbIdx); 
                 step            = {'probability'};
-                if numel(unique(HighScoreChord))~=1        
-                    HighScoreChord = 72
+                if numel(unique(highScoreChord)) ~= 1        
+                    highScoreChord = 72
                     step     = {'no solve'};
                     bar      = j
                 end
             end
 
-            Ans.Chord{j,k-1}     = HighScoreChord;
-            Ans.sameScore(j,k-1) = step;
+            Ans.chord{j, k - 1} = highScoreChord;
+            Ans.tieBreaking(j, k - 1) = step;
         end
         
-        Ans.templ_no(j,k-1)  = ceil(Ans.Chord{j,k-1}(1)/12);
-        Ans.pitch_no{j,k-1}  = ~(ceil(mod(Ans.Chord{j,k-1},12)/12))*12 + mod(Ans.Chord{j,k-1},12);
-        Ans.ChordName{j,k-1} = strcat(pitchName(Ans.pitch_no{j,k-1}),':',tempName(Ans.templ_no(j,k-1)));
+        Ans.templateNo(j, k - 1) = ceil(Ans.chord{j, k-1}(1) / 12);
+        Ans.pitchNo{j, k - 1} = ~(ceil(mod(Ans.chord{j, k - 1}, 12) / 12)) * 12 + mod(Ans.chord{j, k - 1}, 12);
+        Ans.chordName{j, k - 1} = strcat(pitchName(Ans.pitchNo{j, k - 1}), ':', tempName(Ans.templateNo(j, k - 1)));
         
-        evaI = evaI + 1;
-        evaChord{evaI,1} = j;
-        evaChord{evaI,2} = segOnset(MARK(k-1));
-        evaChord(evaI,4) = Ans.ChordName{j,k-1};
-        evaChord{evaI,5} = HighScoreChord;
+        evaluationIdx = evaluationIdx + 1;
+        evaluationChord{evaluationIdx, 1} = j;
+        evaluationChord{evaluationIdx, 2} = segOnset(optimalPath(k - 1));
+        evaluationChord(evaluationIdx, 4) = Ans.chordName{j, k - 1};
+        evaluationChord{evaluationIdx, 5} = highScoreChord;
         
 
     end
@@ -177,7 +163,7 @@ for j = 1:length(barNote)
             
     % 算此小節的和弦在24調中 屬於該調的和弦數量
     for key_i=1:24
-        ansBarChord = Ans.Chord(j,:);
+        ansBarChord = Ans.chord(j,:);
         DIFF = numel(setdiff(ansBarChord(ansBarChord~=0),keyChord(key_i,:)));
         num = numel(ansBarChord(ansBarChord~=0));
         SCORE(j,key_i) = (num-DIFF)/num;
@@ -210,7 +196,7 @@ for j = 1:length(barNote)
         keyRank(j,1:24) = 0;
         keyRank(j,SCORE(j,:)==score_rank(1)) = 1;
 
-        keyRatio(j,:) = KeyConsistRatio(noteBar);               % new
+        keyRatio(j,:) = keyConsistRatio(noteBar);               % new
         keyRatioRank1(j,:) = keyRatio(j,:).*keyRank(j,:);       % new
         keySortRatio(j,:) = keyRatioRank1(j,nameIdxRank(j,:));  % new
         % 處理 把max留下來 其他不要
@@ -231,69 +217,59 @@ for j = 1:length(barNote)
 end
 
 if isSave
-    cell2csv(['chordEva/eva_' fileName '.csv'], evaChord)
+    cell2csv(['chordEva/eva_' fileName '.csv'], evaluationChord);
 end
 
 
 
 
-%% function 
-
-
-function [barNote, barSTART] = bar_note_data(midiData, timeSig)
-% %               1    2    4+8    4+16     4    8+16      8      16    
-% noteValue   = [ 1; 0.5; 0.375; 0.3125; 0.25; 0.1875; 0.125; 0.0625 ];
-% nearDur         = dsearchn(noteValue, Note{bar_i}(:,2)/2^timeSig(1,2));
-% W_dur           = noteValue(nearDur);  
-    % init
+%% 
+% description : 整理每個小節有哪些音，及音符資訊
+% input : mididata -> midi資訊
+%         timeSig  -> 拍號
+% output : barNote -> 每個小節的midi資訊
+%          barOnset-> 每個小節開始的beat
+function [barNote, onsetBar] = bar_note_data(midiData, timeSig)
     addBeat     = 0; 
     addBar      = 0; 
-    midiSize    = size(midiData,2);
+    midiSize    = size(midiData, 2);
     
-    for i = 1:size(timeSig,1)
-
-        NoOfBeats       =   timeSig(i,1)*(4/(2^timeSig(i,2)));
-        if i ~= size(timeSig,1)
-            NoOfBar     =   max(ceil( ((timeSig(i+1,5)-1) - timeSig(i,5) ) / NoOfBeats), 1);
+    for i = 1:size(timeSig, 1)
+        time = timeSig(i, 1) * (4 / (2^timeSig(i, 2))); % 拍數
+        if i ~= size(timeSig, 1)
+            barNo = max(ceil( ((timeSig(i + 1, 5) - 1) - timeSig(i, 5) ) / time), 1);
         else
-            NoOfBar     =   max(ceil( ( sum(midiData(end,1:2)) - timeSig(i,5) ) / NoOfBeats), 1);
+            barNo = max(ceil( ( sum(midiData(end, 1:2)) - timeSig(i, 5) ) / time), 1);
         end
 
-        for j = 1:NoOfBar
-            barStart   = (addBeat+(j-1)*NoOfBeats);
-            barEnd     = addBeat+j*NoOfBeats;
-            notesOfBar = intersect(find(midiData(:,1)>=barStart), find(midiData(:,1)<barEnd));
+        for j = 1:barNo
+            barOnset = addBeat + (j - 1) * time;
+            barOffset = addBeat + j * time;
+            barNoteIdx = intersect(find(midiData(:, 1) >= barOnset), find(midiData(:, 1) < barOffset));
 
             currentBar = addBar + j;
-            midiData(notesOfBar, midiSize+1) = currentBar;
-            barSTART(currentBar) = barStart;
+            midiData(barNoteIdx, midiSize + 1) = currentBar;
+            onsetBar(currentBar) = barOnset;
 
+            % 前個小節圓滑線至此小節的音符slur
+            offsetInBarIdx = intersect(find(sum(midiData(:, 1:2), 2) < barOffset), find(sum(midiData(:, 1:2), 2) > barOnset));
+            onsetbeforeBarIdx = intersect(find(midiData(:, 1) < barOnset), offsetInBarIdx);
+            slurNote = midiData(onsetbeforeBarIdx, :);
+            slurNote(:, 2) = slurNote(:, 2) + barOnset - slurNote(:, 1);
+            slurNote(:, 1) = barOnset; % 把onset改成此小節一開始
 
-            % 前個小節圓滑線至此小節的音符
-            innerOffset     = intersect(find(sum(midiData(:,1:2),2)<barEnd) , find(sum(midiData(:,1:2),2)>barStart));
-            overOnset       = intersect(find(midiData(:,1)<barStart), innerOffset);
-            overNote        = midiData(overOnset, :);
-            overNote(:,2)   = overNote(:,2) + barStart - overNote(:,1);
-            overNote(:,1)   = barStart;
-
-            noteBar         = midiData(notesOfBar, :);      % 此小節內的音符
-            noteBar         = [noteBar; overNote];          % 把onset改成此小節一開始
+            noteBar = [midiData(barNoteIdx, :); slurNote]; % 此小節內的音符
 
             if ~isempty(noteBar)
-
-                noteBar       = sortrows(noteBar,1);        % 依據第一行排序 小到大
-%                 tmp           = length(noteBar);
-                noteBar       = triDetection(noteBar);      % tri 處理
-    %                 noteBar(noteBar(:,2)<0.2,:) = [];         % 把小於duration 0.25的音符都刪掉，認為太小音符不會對和弦有太大的影響。
-                barNote{currentBar,1}      = noteBar;
+                noteBar = sortrows(noteBar, 1);
+                noteBar = triDetection(noteBar); % tri 處理
+                barNote{currentBar, 1} = noteBar;
             end
         end
-
-        addBar  = addBar  + NoOfBar;
-        addBeat = addBeat + NoOfBeats*NoOfBar;
-
+        
+        addBar  = addBar  + barNo;
+        addBeat = addBeat + time * barNo;
     end
-
 end
 %%
 % description : 建立大小調的和弦
@@ -317,123 +293,118 @@ end
 %%
 % description: 以拍點為partition point，紀錄每個minSeg內的音符權重，以及minSeg內最低音
 % input:  noteBar      -> 小節音符
-%         barStart     -> 小節開始的beat
+%         barOnset     -> 小節開始的beat
 % output: pitchClass,  -> 每個minSeg有所有音，且weight為音符長度，大小為N*12 (N為minSeg數量,12為一個八度音的數量)
-%         lowestPitchC -> 每個minSeg的最低音，且weight為音符長度，大小為N*12 (N為minSeg數量,12為一個八度音的數量)
+%         lowestPitchClass -> 每個minSeg的最低音，且weight為音符長度，大小為N*12 (N為minSeg數量,12為一個八度音的數量)
 %         lowestP      -> 每個minSeg的最低音，且不以一個八度來看(不mod12)
-%         miniSeg      -> 每個minSeg之onset offset的beat
+%         minSeg      -> 每個minSeg之onset offset的beat
 % 找左手最低音權重較大，難以分辨左右手，所以找片段最低音且同時有兩個音
+function [pitchClass, lowestPitchClass, lowestP, minSeg] = downbeat_pitchclass(noteBar, barOnset, isDownbeatWeight)
+    beatInBar = noteBar(:,9);
+    minSeg = [0:beatInBar-1; 1:beatInBar]'; % 以拍點為最小片段 (第 0 1 2 3 拍)
 
-function [pitchClass, lowestPitchC, lowestP, miniSeg] = downbeat_pitchclass(noteBar, barStart, isDownbeatWeight,ratio)
+    pitchClass = zeros(size(minSeg, 1), 12);
+    lowestPitchClass = zeros(size(minSeg, 1), 12);
+    lowestP = inf * ones(size(minSeg, 1), 1);
+    
+    for s = 1:size(minSeg, 1)
+        unit = (1/2)^4;
+        noteOn = zeros(size(noteBar,1),1);
+        noteOff = zeros(size(noteBar,1),1);
+        isOnsetInt = zeros(size(noteBar, 1), 1);
+        noteNum = zeros(ceil((minSeg(s, 2) - minSeg(s, 1)) / unit), 1); % 紀錄minSeg內每unit長度，有幾個音
+        noteLowestIdx = zeros(ceil((minSeg(s, 2) - minSeg(s, 1)) / unit), 1); % 每個unit最低音是哪個音
+        noteLowestPitch = inf * ones(ceil((minSeg(s, 2) - minSeg(s, 1)) / unit), 1); % 每個unit最低音的音高
 
-
-% &&&&&&&&&&& .   downbeat  &&&&&&&&&&&&&&
-    beatInBar   = noteBar(:,9);
-    miniSeg     = [[0:beatInBar-1]' [1:beatInBar]']; % 以拍點為最小片段 (第 0 1 2 3 拍)
-
-% &&&&&&&&&&& .   每個片段有哪些音，音符長度為weight  &&&&&&&&&&&&&&
-    pitchClass    = zeros(size(miniSeg,1),12);
-    lowestPitchC  = zeros(size(miniSeg,1),12);
-    lowestP       = inf*ones(size(miniSeg,1),1);
-    for P = 1:size(miniSeg,1)
-        unit        = (1/2)^4;
-        On          = zeros(size(noteBar,1),1);
-        Off         = zeros(size(noteBar,1),1);
-        onCutFlag   = zeros(size(noteBar,1),1);
-        lowestFlag  = zeros(ceil((miniSeg(P,2)-miniSeg(P,1))/unit), 1);     % 紀錄minSeg內每unit長度，有幾個音
-        lowestNO    = zeros(ceil((miniSeg(P,2)-miniSeg(P,1))/unit) ,1);     % 每個unit最低音是哪個音
-        lowestPitch = inf*ones(ceil((miniSeg(P,2)-miniSeg(P,1))/unit),1);   % 每個unit最低音的音高
-        for note = 1:size(noteBar,1)
-           
-            On(note)  = round(noteBar(note,1)-barStart,4);
-            Off(note) = round(sum(noteBar(note,1:2))-barStart,4);
-            onsetCut  = 0; % isDownbeatWeight
-            if On(note) < miniSeg(P,1)
-                onsetCut = miniSeg(P,1)-On(note);  % isDownbeatWeight
-                On(note) = miniSeg(P,1); 
-            end
-            if Off(note)> miniSeg(P,2); Off(note)= miniSeg(P,2); end
-                        
-            onCutFlag(note) = (onsetCut == fix(onsetCut)); % isDownbeatWeight
-
-            if  Off(note)-On(note)>0   % 每個音有沒有落在此minSeg內
-                pitchNo = mod(noteBar(note,4),12)+1;
-                pitchClass(P,pitchNo) = pitchClass(P,pitchNo) + Off(note)-On(note);
+        for n = 1:size(noteBar, 1)
+            noteOn(n) = noteBar(n, 1) - barOnset;
+            noteOff(n) = sum(noteBar(n,1:2)) - barOnset;
+            isOnsetInt(n) = (noteOn(n) == fix(noteOn(n))); % isDownbeatWeight
+            
+            if noteOn(n) < minSeg(s, 1); noteOn(n) = minSeg(s, 1); end
+            if noteOff(n) > minSeg(s, 2); noteOff(n) = minSeg(s, 2); end
+            
+            if  noteOff(n) - noteOn(n) > 0   % 判斷落在minSeg內的音
+                pitchNo = mod(noteBar(n, 4), 12) + 1;
+                pitchClass(s, pitchNo) = pitchClass(s, pitchNo) + noteOff(n) - noteOn(n);
                 
-                if isDownbeatWeight && On(note) == fix(On(note)) && onCutFlag(note)
-                    pitchClass(P,pitchNo) = pitchClass(P,pitchNo) + Off(note)-On(note);
+                if isDownbeatWeight && isOnsetInt(n)
+                    pitchClass(s, pitchNo) = pitchClass(s, pitchNo) + noteOff(n) - noteOn(n);
                 end
-                % 音on和off是佔minSeg內的哪些unit
-                On_num  = floor((On(note) - miniSeg(P,1))/unit) + 1;
-                Off_num = ceil((Off(note) - miniSeg(P,1))/unit);
 
-                [minPitch,idx] = min([lowestPitch(On_num:Off_num) ones(Off_num-On_num+1,1)*noteBar(note,4)],[],2);
-                lowestFlag(On_num:Off_num) = lowestFlag(On_num:Off_num)+1;
-                if ~isempty(find(idx==2, 1))
-                    lowestNO(find(idx==2)+On_num-1) = note;
-                    lowestPitch(On_num:Off_num)     = minPitch;
+                onUnitNum  = floor((noteOn(n) - minSeg(s,1)) / unit) + 1; % 音on和off是佔minSeg內的哪些unit
+                offUnitNum = ceil((noteOff(n) - minSeg(s,1)) / unit);
+                repPitch = ones(offUnitNum - onUnitNum + 1, 1) * noteBar(n, 4);
+
+                [minPitch, idx] = min([noteLowestPitch(onUnitNum:offUnitNum) repPitch], [], 2);
+                noteNum(onUnitNum:offUnitNum) = noteNum(onUnitNum:offUnitNum) + 1;
+                if ~isempty(find(idx == 2, 1))
+                    noteLowestIdx(find(idx == 2) + onUnitNum - 1) = n;
+                    noteLowestPitch(onUnitNum:offUnitNum) = minPitch;
                 end
             end
             
-            if note == size(noteBar,1) && ~isempty(find(lowestFlag>1, 1))
-                lowestP(P)  = min(lowestPitch(lowestFlag>1));
-                lowIDX      = find(lowestPitch==lowestP(P));
-                lowNUM      = numel(lowIDX);
+            % 找到片段內的最低音
+            if n == size(noteBar, 1) && ~isempty(find(noteNum > 1, 1))
+                lowestP(s) = min(noteLowestPitch(noteNum > 1));
+                idx = find(noteLowestPitch == lowestP(s));
+                lowestDur = numel(idx);
                 if isDownbeatWeight
-                    weight      = 0;
-                    intSect     = intersect(lowestNO, find(onCutFlag==1));
+                    weight = 0;
+                    intSect = intersect(noteLowestIdx, find(isOnsetInt == 1));
                     for inS = 1:length(intSect)
-                        weight = weight + numel(find(lowestNO(lowIDX)==intSect(inS)));
+                        weight = weight + numel(find(noteLowestIdx(idx) == intSect(inS)));
                     end
-                    lowNUM = lowNUM + weight*ratio;
+                    lowestDur = lowestDur + weight;
                 end
-                lowestPitchC(P,mod(lowestP(P),12)+1) = lowNUM * unit;
-                lowNUM * unit
+                lowestPitchClass(s, mod(lowestP(s), 12) + 1) = lowestDur * unit;
             end
-             
-        end       
+        end     
     end
-    miniSeg = miniSeg + barStart;
+    minSeg = minSeg + barOnset;
 end
 
-function [pitchClass, miniSeg] = min_seg_pitchclass(noteBar, barStart)
-% &&&&&&&&&&& .   downbeat  &&&&&&&&&&&&&&
-% %     beatInBar = noteBar(:,9);
-% % %     miniSeg = [[0:beatInBar-1]' [1:beatInBar]'];
-% %     miniSeg       = unique(round([noteBar(:,1); sum(noteBar(:,1:2),2); [0:beatInBar-1]'+barStart] ,4));
-% %     miniSeg(:,2)  = [ miniSeg(2:end,1);   beatInBar(1)+barStart ];
-% &&&&&&&&&&& .   downbeat  &&&&&&&&&&&&&&
+%%
+% description: 所有片段的pitchClass
+% input     : noteBar -> 小節內的 midi data
+%             barOnset-> 小節開始的beat
+% output    : pitchClass -> 紀錄小節所有片段的pitch class
+%             minSeg -> 小節所有最小片段onset offset
+function [pitchClass, minSeg] = min_seg_pitchclass(noteBar, barOnset)
 
-    
+    % downbeat 為最小片段
+%     beatInBar = noteBar(:, 9);
+% %     minSeg = [0:beatInBar-1; 1:beatInBar]';
+%     minSeg = unique(round([noteBar(:, 1); sum(noteBar(:, 1:2), 2); (0:beatInBar-1)' + barOnset], 4));
+%     minSeg(:, 2) = [minSeg(2:end,1); beatInBar(1) + barOnset];
+
     % 最小片段的onset offset
-    miniSeg       = unique(round([noteBar(:,1); sum(noteBar(:,1:2),2)],4));
-    miniSeg(:,2)  = [ miniSeg(2:end,1);   round(sum(noteBar(end,1:2)),4) ];
+    minSeg = unique(round([noteBar(:, 1); sum(noteBar(:, 1:2), 2)], 4));
+    minSeg(:, 2) = [minSeg(2:end, 1); round(sum(noteBar(end, 1:2)), 4)];
     
-    % 把miniSeg太小的去掉
-    miniTime      = 0.025;
-    if miniSeg(end,1)==miniSeg(end,2); miniSeg(end,:)=[]; end      
-    miniSeg(diff(miniSeg,1,2)<=miniTime,:) = [];
+    % 把minSeg太小的去掉
+    miniTime = 0.025;
+    if minSeg(end, 1) == minSeg(end, 2); minSeg(end, :)=[]; end
+    minSeg(diff(minSeg, 1, 2) <= miniTime, :) = [];
 
     % 紀錄每個最小片段有哪些音
-    pitchClass    = zeros(length(miniSeg),12);
-    parpointNum   = zeros(length(miniSeg), 1);
-
+    pitchClass = zeros(length(minSeg), 12);
     for k=1:size(noteBar, 1)
-        s               = find(abs(round(noteBar(k,1),4) - miniSeg(:,1)) <= miniTime);   % 這個音從哪個seg開始
-        e               = find(round(sum(noteBar(k,1:2)),4)>=miniSeg(:,2));              % 這個音從哪個seg結束
-        parpointNum(s)  = parpointNum(s) + 1;
-        pitchNum        = mod(noteBar(k,4),12);
-        pitchClass(s:e(end),pitchNum+1) = pitchClass(s:e(end),pitchNum+1)+1; % miniSeg * 12
+        s = find(abs(round(noteBar(k, 1), 4) - minSeg(:, 1)) <= miniTime); % 這個音從哪個seg開始
+        e = find(round(sum(noteBar(k, 1:2)), 4) >= minSeg(:, 2)); % 這個音從哪個seg結束
+        pitchNum = mod(noteBar(k, 4), 12);
+        pitchClass(s:e(end), pitchNum + 1) = pitchClass(s:e(end), pitchNum + 1) + 1;
     end
 end
 
+%%
 function [maxScoreMatrix, I, S] = record_min_seg_score(pitchClass)
     %                            大三        屬七         小三       減
     template            = [ 0,4,7,-1;  0,4,7,10;   0,3,7,-1; 0,3,6,-1];  
     templateNum             = size(template,1);
     partitionNum      = size(pitchClass,1)+1;
      rootS  = -inf*ones(partitionNum, partitionNum, templateNum*12);
-     P      = -inf*ones(partitionNum, partitionNum, templateNum*12);
+     s      = -inf*ones(partitionNum, partitionNum, templateNum*12);
      N      = -inf*ones(partitionNum, partitionNum, templateNum*12);
      M      = -inf*ones(partitionNum, partitionNum, templateNum*12);
      S      = -inf*ones(partitionNum, partitionNum, templateNum*12);
@@ -445,10 +416,10 @@ function [maxScoreMatrix, I, S] = record_min_seg_score(pitchClass)
                     templateNo = mod(template(kk,(template(kk,:)~=-1)) + p - 1 , 12);
                     Template = zeros(1,12); Template(1,templateNo + 1) = 1;
                     rootS(ii,jj,(kk-1)*12+p) = sum(sum(pitchClass(ii:jj-1,templateNo(1)+1))); % 根音的score
-                    P(ii,jj,(kk-1)*12+p)     = sum(sum(pitchClass(ii:jj-1,templateNo+1  )));                  % 片段 有, 和弦 有
-                    N(ii,jj,(kk-1)*12+p)     = sum(sum(pitchClass(ii:jj-1,:)))-P(ii,jj,(kk-1)*12+p);    % 片段 有, 和弦沒有            
+                    s(ii,jj,(kk-1)*12+p)     = sum(sum(pitchClass(ii:jj-1,templateNo+1  )));                  % 片段 有, 和弦 有
+                    N(ii,jj,(kk-1)*12+p)     = sum(sum(pitchClass(ii:jj-1,:)))-s(ii,jj,(kk-1)*12+p);    % 片段 有, 和弦沒有            
                     M(ii,jj,(kk-1)*12+p)     = sum((sum(pitchClass(ii:jj-1,:),1)==0).*Template);        % 片段沒有, 和弦 有
-                    S(ii,jj,(kk-1)*12+p)     = P(ii,jj,(kk-1)*12+p) - ( N(ii,jj,(kk-1)*12+p) + M(ii,jj,(kk-1)*12+p) );
+                    S(ii,jj,(kk-1)*12+p)     = s(ii,jj,(kk-1)*12+p) - ( N(ii,jj,(kk-1)*12+p) + M(ii,jj,(kk-1)*12+p) );
                 end
             end
          end
@@ -457,25 +428,30 @@ function [maxScoreMatrix, I, S] = record_min_seg_score(pitchClass)
     [maxScoreMatrix,I] = max(S,[],3);
 end
 
-function [keyRatio] = KeyConsistRatio(Note)
-% 小節內 每個調的組成音比例
-    load Key_DiatonicTriad_V7.mat
+%%
+% description: 計算每個小節所有的大小調組成音比例
+% input     : note -> midi data
+% output    : keyRatio -> 所有調組成音比例
+function [keyRatio] = keyConsistRatio(note)
+    load Key_DiatonicTriad_V7.mat keyFusion
 
-    consist     = zeros( 1,12);
-    keyConsist  = zeros(24,12);
-    barPitch    = mod(Note(:,4),12)+1;
-    tab = tabulate(barPitch);
-    consist(1:size(tab,1)) = tab(:,2);
+    pitchConsist = zeros(1, 12);
+    keyConsist = zeros(24, 12);
+    keyRatio = zeros(1, 12);
+    
+    barPitch = mod(note(:,4), 12) + 1;
+    pitchTabulate = tabulate(barPitch);
+    pitchConsist(1:size(pitchTabulate, 1)) = pitchTabulate(:, 2);
     
     for i=1:24
-        keyConsist(i, keyH(i).consistNumber+1) = 1;
-        keyRatio(i) = sum(keyConsist(i,:).* consist)/size(Note,1);
+        keyConsist(i, keyFusion(i).consistNumber + 1) = 1;
+        keyRatio(i) = sum(keyConsist(i,:) .* pitchConsist) / size(note, 1);
     end
 
 end
 
 %%
-% desciption: 將midi的duration(unit:beat)正規化成跟譜一樣
+% description: 將midi的duration(unit:beat)正規化成跟譜一樣
 % input     : midiData           -> 原始   的midi data
 % output    : normalizedMidiData -> 正規化後的midi data
 function [midiData] = normalize_midi_data (midiData)
