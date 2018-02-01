@@ -5,9 +5,11 @@
     tempName = {'maj','7','min','Fully dim7','Half dim7','dim3','X'};
     pitchName = {'C :','C#:','D :','D#:','E :','F :','F#:','G :','G#:','A :','A#:','B :'};
 
-    filepath = '../midi/'
+    filepath = '../midi/';
     filename = 'mz_545_1_noRepeat';%beethoven_string_quartet_135, mz_16_1 O48N2AOM quartet_16_3 dim7_1
     [midiINFO, timeSig]  = midi_Preprocess([filepath filename]);
+
+    midiINFO = normalize_midi_data(midiINFO);
 
     addBeat = 0; addBar = 0; refNextBarRoot = 0;
 
