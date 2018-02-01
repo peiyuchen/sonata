@@ -5,13 +5,17 @@
     tempName = {'maj','7','min','Fully dim7','Half dim7','dim3','X'};
     pitchName = {'C :','C#:','D :','D#:','E :','F :','F#:','G :','G#:','A :','A#:','B :'};
 
-
-    filename = '../midi/mz_16_1';%beethoven_string_quartet_135, mz_16_1 O48N2AOM quartet_16_3 dim7_1
-    [midiINFO, timeSig]  = midi_Preprocess(filename);
+    filepath = '../midi/'
+    filename = 'mz_545_1_noRepeat';%beethoven_string_quartet_135, mz_16_1 O48N2AOM quartet_16_3 dim7_1
+    [midiINFO, timeSig]  = midi_Preprocess([filepath filename]);
 
     addBeat = 0; addBar = 0; refNextBarRoot = 0;
 
+    eva_i = 1;
+    evaChord = {'小節','拍數(onset)','調性','和弦名稱','和弦編號','備註'};% new
 
+    isSave = 1;
+    
     for i = 1:size(timeSig,1)
 
         NoOfBeats       =   timeSig(i,1)*(4/(2^timeSig(i,2)));
@@ -109,7 +113,7 @@
     %% 分段：最佳路徑演算法 HarmAn
 
     %             MARK = HarmAn( [1;Onset2;partitionPoint], partitionPoint, weight );
-                MARK                        = HarmAn( 1:partitionPoint,partitionPoint, weight );
+                MARK                        = HarmAn( weight, partitionPoint, 1:partitionPoint );
                 Ans.Mark(j,1:length(MARK))  = MARK;
 
                 % 紀錄 最佳路徑的onset
@@ -182,17 +186,24 @@
                             Ans.templ_no(j-1,idx(end))  = ceil(Ans.Chord(j-1,idx(end))/12);
                             Ans.pitch_no(j-1,idx(end))  = ~(ceil(mod(Ans.Chord(j-1,idx(end)),12)/12))*12 + mod(Ans.Chord(j-1,idx(end)),12);
                             Ans.ChordName{j-1,idx(end)} = strcat(pitchName(Ans.pitch_no(j-1,idx(end))), tempName(Ans.templ_no(j-1,idx(end))));    
-
+                            
+                            evaChord(eva_i,4) = Ans.ChordName{j-1,idx(end)};
+                            evaChord{eva_i,5} = Ans.Chord(j-1,idx(end));
                         else
                             error('step3 : Fully Diminished 7th 沒有解決');
                         end 
                     end
-                end     
+                    
+                    eva_i = eva_i + 1;
+                    evaChord{eva_i,1} = j;
+                    evaChord{eva_i,2} = segOnset(MARK(k-1));
+                    evaChord(eva_i,4) = Ans.ChordName{j,k-1};
+                    evaChord{eva_i,5} = Ans.Chord(j,k-1);
+                end
 
             % step 3 : Diminished 7th resolution
                 resolution_idx = find( Ans.sameScore(j,:) == 3 );
                 if resolution_idx
-
                     for t=1:numel(resolution_idx)        
                         nowRoot      = ~(ceil(mod(Resolution_Dim7.root{j,resolution_idx(t)},12)/12))*12 + mod(Resolution_Dim7.root{j,resolution_idx(t)},12);
 
@@ -207,7 +218,10 @@
                                 Ans.templ_no(j,resolution_idx(t))  = ceil(AnsChord/12); 
                                 Ans.pitch_no(j,resolution_idx(t))  = ~(ceil(mod(AnsChord,12)/12))*12 + mod(AnsChord,12);
                                 Ans.ChordName{j,resolution_idx(t)} = strcat(pitchName(Ans.pitch_no(j,resolution_idx(t))), tempName(Ans.templ_no(j,resolution_idx(t))));    
-
+                                
+                                nowBarIdx = find(cell2mat(evaChord(2:end,1))==j);
+                                evaChord(nowBarIdx(resolution_idx(t))+1,4) = Ans.ChordName{j,resolution_idx(t)};
+                                evaChord{nowBarIdx(resolution_idx(t))+1,5} = Ans.Chord(j,resolution_idx(t));
                             else
                                 error('step3 : Fully Diminished 7th 沒有解決');
                             end 
@@ -215,18 +229,18 @@
                         else
                             refNextBarRoot = 1;
                         end   
-
                     end
-
                 end 
-
-
             end
-
         end
 
         addBar  = addBar  + NoOfBar;
         addBeat = addBeat + NoOfBeats*NoOfBar;
 
     end
+    
+    if isSave
+        cell2csv(['chordEva/eva_' filename '.csv'], evaChord)
+    end
+
 
