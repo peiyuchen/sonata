@@ -14,8 +14,6 @@ filePath = '../midi';
 fileName = 'mz_545_1_noRepeat';
 [midiData, timeSig]  = midi_Preprocess(fileName);
 
-midiData = normalize_midi_data(midiData);
-
 % each bar's information
 [barNote, barOnset] = bar_note_data(midiData, timeSig);
 
@@ -39,181 +37,179 @@ evaluationChord = {'小節','拍數(onset)','調性','和弦名稱','和弦編號','備註'};% n
 isDownbeatAndDurWeight      = 1;
 isLowWeight                 = 1;
 isDownbeatWeight            = 0;
-isSave                      = 0;
+isSave                      = 1;
 
 
 for j = 1:length(barNote)
-
     noteBar = barNote{j};
-    
-    % 找到最小片段分割點有哪些音
-    [pitchClass, minSeg] = min_seg_pitchclass(noteBar, barOnset(j));   
-    if isDownbeatAndDurWeight
-        [pitchClass, lowestPClass, lowestP, minSeg] = downbeat_pitchclass(noteBar, barOnset(j), isDownbeatWeight);
-    end
-    %% 紀錄所有可能分段的分數 
-%     [maxScoreMatrix, scoreMatrixIdx, scoreMatrix] = record_min_seg_score(pitchClass);    
 
-    templateNum  = size(template, 1);
-    partitionNum = size(pitchClass, 1) + 1;
-    rootS  = -inf * ones(partitionNum, partitionNum, templateNum * 12);
-    s      = -inf * ones(partitionNum, partitionNum, templateNum * 12);
-    N      = -inf * ones(partitionNum, partitionNum, templateNum * 12);
-    M      = -inf * ones(partitionNum, partitionNum, templateNum * 12);
-    S      = -inf * ones(partitionNum, partitionNum, templateNum * 12);
-    
-    lowestPitchP = zeros(partitionNum, partitionNum, templateNum * 12);
-    lowestPitchN = -inf * ones(partitionNum, partitionNum, templateNum * 12);
+    if ~isempty(noteBar)
+        % 找到最小片段分割點有哪些音
+        [pitchClass, minSeg] = min_seg_pitchclass(noteBar, barOnset(j));   
+        if isDownbeatAndDurWeight
+            [pitchClass, lowestPClass, lowestP, minSeg] = downbeat_pitchclass(noteBar, barOnset(j), isDownbeatWeight);
+        end
+        %% 紀錄所有可能分段的分數 
+    %     [maxScoreMatrix, scoreMatrixIdx, scoreMatrix] = record_min_seg_score(pitchClass);    
 
-    
-     for ii = 1:partitionNum
-         for jj = ii+1:partitionNum             
-             if isLowWeight && min(lowestP(ii:jj-1, 1)) ~= Inf
-                lowestPitchIdx = find(lowestP == min(lowestP(ii:jj-1, 1)));
-             end
-             for kk = 1:templateNum
-                 for p = 1:12
-                     templateNo = mod(template(kk,(template(kk,:)~=-1)) + p - 1 , 12);
-                     Template = zeros(1,12); 
-                     Template(1,templateNo + 1) = 1;
-                     
-                     rootS(ii, jj, (kk - 1) * 12 + p) = sum(sum(pitchClass(ii:jj-1, templateNo(1) + 1)));                 % 根音的score
-                     s(ii, jj, (kk - 1) * 12 + p)     = sum(sum(pitchClass(ii:jj-1, templateNo + 1)));                  % 片段 有, 和弦 有
-                     N(ii, jj, (kk - 1) * 12 + p)     = sum(sum(pitchClass(ii:jj-1, setdiff(1:12,templateNo+1))));    % 片段 有, 和弦沒有  
-%                      N(ii,jj,(kk-1)*12+p)     = sum(sum(pitchClass(ii:jj-1,:)))-s(ii,jj,(kk-1)*12+p);    % 片段 有, 和弦沒有
-                     M(ii, jj, (kk - 1) * 12 + p)     = sum((sum(pitchClass(ii:jj-1, :),1) == 0) .* Template);        % 片段沒有, 和弦 有
-                     S(ii, jj, (kk - 1) * 12 + p)     = ...
-                         s(ii, jj, (kk - 1) * 12 + p) - (N(ii, jj, (kk - 1) * 12 + p) + M(ii, jj, (kk-1) * 12 + p));
-                     %%%%% 加最低音weight %%%%%%
-                     if  isLowWeight && min(lowestP(ii:jj-1, 1)) ~= Inf
-                         lowestPitchP(ii, jj, (kk - 1) * 12 + p)  = sum(sum(lowestPClass(lowestPitchIdx, templateNo + 1)));
-                         lowestPitchN(ii, jj, (kk - 1) * 12 + p)  = sum(sum(lowestPClass(lowestPitchIdx, setdiff(1:12, templateNo + 1))));
-                         S(ii, jj, (kk - 1) * 12 + p) = S(ii, jj, (kk - 1) * 12 + p) + ...
-                             lowestPitchP(ii, jj, (kk - 1) * 12 + p) - lowestPitchN(ii, jj, (kk - 1) * 12 + p);
+        templateNum  = size(template, 1);
+        partitionNum = size(pitchClass, 1) + 1;
+        rootS  = -inf * ones(partitionNum, partitionNum, templateNum * 12);
+        P      = -inf * ones(partitionNum, partitionNum, templateNum * 12);
+        N      = -inf * ones(partitionNum, partitionNum, templateNum * 12);
+        M      = -inf * ones(partitionNum, partitionNum, templateNum * 12);
+        S      = -inf * ones(partitionNum, partitionNum, templateNum * 12);
+
+        lowestPitchP = zeros(partitionNum, partitionNum, templateNum * 12);
+        lowestPitchN = -inf * ones(partitionNum, partitionNum, templateNum * 12);
+
+         for ii = 1:partitionNum
+             for jj = ii+1:partitionNum      
+                 for kk = 1:templateNum
+                     for p = 1:12
+                         templateNo = mod(template(kk,(template(kk,:)~=-1)) + p - 1 , 12);
+                         Template = zeros(1,12); 
+                         Template(1,templateNo + 1) = 1;
+
+                         rootS(ii, jj, (kk - 1) * 12 + p) = sum(sum(pitchClass(ii:jj-1, templateNo(1) + 1)));                 % 根音的score
+                         P(ii, jj, (kk - 1) * 12 + p)     = sum(sum(pitchClass(ii:jj-1, templateNo + 1)));                  % 片段 有, 和弦 有
+                         N(ii, jj, (kk - 1) * 12 + p)     = sum(sum(pitchClass(ii:jj-1, setdiff(1:12,templateNo+1))));    % 片段 有, 和弦沒有  
+    %                      N(ii,jj,(kk-1)*12+p)     = sum(sum(pitchClass(ii:jj-1,:)))-s(ii,jj,(kk-1)*12+p);    % 片段 有, 和弦沒有
+                         M(ii, jj, (kk - 1) * 12 + p)     = sum((sum(pitchClass(ii:jj-1, :),1) == 0) .* Template);        % 片段沒有, 和弦 有
+                         S(ii, jj, (kk - 1) * 12 + p)     = ...
+                             P(ii, jj, (kk - 1) * 12 + p) - (N(ii, jj, (kk - 1) * 12 + p) + M(ii, jj, (kk-1) * 12 + p));
+                         %%%%% 加最低音weight %%%%%%
+                         if  isLowWeight && min(lowestP(ii:jj-1, 1)) ~= Inf
+                             lowestPitchIdx = ii + find(lowestP(ii:jj-1, 1) == min(lowestP(ii:jj-1, 1))) - 1;
+                             lowestPitchP(ii, jj, (kk - 1) * 12 + p)  = sum(sum(lowestPClass(lowestPitchIdx, templateNo + 1)));
+                             lowestPitchN(ii, jj, (kk - 1) * 12 + p)  = sum(sum(lowestPClass(lowestPitchIdx, setdiff(1:12, templateNo + 1))));
+                             S(ii, jj, (kk - 1) * 12 + p) = S(ii, jj, (kk - 1) * 12 + p) + ...
+                                 lowestPitchP(ii, jj, (kk - 1) * 12 + p) - lowestPitchN(ii, jj, (kk - 1) * 12 + p);
+                         end
+                         %%%%%%%%%%%%%%%%%%%%%%%%%%
                      end
-                     %%%%%%%%%%%%%%%%%%%%%%%%%%
                  end
              end
          end
-     end
 
-    [maxScoreMatrix, scoreMatrixIdx ] = max(S, [], 3);
+        [maxScoreMatrix, scoreMatrixIdx ] = max(S, [], 3);
 
-    %% 分段：最佳路徑演算法 HarmAn
-    % &&&&&&&&&&& .   downbeat  &&&&&&&&&&&&&&
-    optimalPath = HarmAn(maxScoreMatrix, partitionNum);
+        %% 分段：最佳路徑演算法 HarmAn
+        % &&&&&&&&&&& .   downbeat  &&&&&&&&&&&&&&
+        optimalPath = HarmAn(maxScoreMatrix, partitionNum);
 
-%     partitionNum      = size(pitchClass,1)+1;
-%     downbeat          = find(minSeg(:,1)==fix(minSeg(:,1)));
-%     optimalPath = HarmAn(maxScoreMatrix, partitionNum, [downbeat; partitionNum]);
-    % &&&&&&&&&&& .   downbeat  &&&&&&&&&&&&&&
+    %     partitionNum      = size(pitchClass,1)+1;
+    %     downbeat          = find(minSeg(:,1)==fix(minSeg(:,1)));
+    %     optimalPath = HarmAn(maxScoreMatrix, partitionNum, [downbeat; partitionNum]);
+        % &&&&&&&&&&& .   downbeat  &&&&&&&&&&&&&&
 
-    % 紀錄 最佳路徑的onset
-    segOnset = [minSeg(:,1)' - barOnset(j), minSeg(end,2) - barOnset(j)];
+        % 紀錄 最佳路徑的onset
+        segOnset = [minSeg(:,1)' - barOnset(j), minSeg(end,2) - barOnset(j)];
 
-    Ans.optimalPath(j, 1:length(optimalPath)) = optimalPath;
-    Ans.segOnset(j, 1:length(optimalPath)) = segOnset(optimalPath);
+        Ans.optimalPath(j, 1:length(optimalPath)) = optimalPath;
+        Ans.segOnset(j, 1:length(optimalPath)) = segOnset(optimalPath);
 
-    %% 最佳路徑的和弦標記
-    for k = 2:length(optimalPath)
-        Ans.chord{j,k-1}       = scoreMatrixIdx(optimalPath(k-1),optimalPath(k));
-        Ans.tieBreaking(j,k-1) = {''};
-        Ans.score(j,k-1)       = maxScoreMatrix(optimalPath(k-1),optimalPath(k));
+        %% 最佳路徑的和弦標記
+        for k = 2:length(optimalPath)
+            Ans.chord{j,k-1}       = scoreMatrixIdx(optimalPath(k-1),optimalPath(k));
+            Ans.tieBreaking(j,k-1) = {''};
+            Ans.score(j,k-1)       = maxScoreMatrix(optimalPath(k-1),optimalPath(k));
 
-        %% 分數一樣的話
-        highScoreChord = find(S(optimalPath(k - 1), optimalPath(k), :) == maxScoreMatrix(optimalPath(k - 1), optimalPath(k)));
-        % step 1 : highest root scoreMatrix
-        if numel(unique(highScoreChord)) ~= 1
-            highScoreRootScore  = rootS(optimalPath(k-1), optimalPath(k), highScoreChord);
-            maxRootIdx          = find(highScoreRootScore == max(highScoreRootScore));
-            highScoreChord      = highScoreChord(maxRootIdx);
-            step                = {'root'};
-            % step 2 : highest probability of occurrence
-            if numel(unique(highScoreChord))~=1
-                chordSpecies    = floor(highScoreChord / 12) + 1;
-                maxProbIdx      = find(chordSpecies == min(chordSpecies));
-                highScoreChord  = highScoreChord(maxProbIdx); 
-                step            = {'probability'};
-                if numel(unique(highScoreChord)) ~= 1        
-                    highScoreChord = 72
-                    step     = {'no solve'};
-                    bar      = j
+            %% 分數一樣的話
+            highScoreChord = find(S(optimalPath(k - 1), optimalPath(k), :) == maxScoreMatrix(optimalPath(k - 1), optimalPath(k)));
+            % step 1 : highest root scoreMatrix
+            if numel(unique(highScoreChord)) ~= 1
+                highScoreRootScore  = rootS(optimalPath(k-1), optimalPath(k), highScoreChord);
+                maxRootIdx          = find(highScoreRootScore == max(highScoreRootScore));
+                highScoreChord      = highScoreChord(maxRootIdx);
+                step                = {'root'};
+                % step 2 : highest probability of occurrence
+                if numel(unique(highScoreChord))~=1
+                    chordSpecies    = floor(highScoreChord / 12) + 1;
+                    maxProbIdx      = find(chordSpecies == min(chordSpecies));
+                    highScoreChord  = highScoreChord(maxProbIdx); 
+                    step            = {'probability'};
+                    if numel(unique(highScoreChord)) ~= 1        
+                        highScoreChord = 72
+                        step     = {'no solve'};
+                        bar      = j
+                    end
                 end
+
+                Ans.chord{j, k - 1} = highScoreChord;
+                Ans.tieBreaking(j, k - 1) = step;
             end
 
-            Ans.chord{j, k - 1} = highScoreChord;
-            Ans.tieBreaking(j, k - 1) = step;
+            Ans.templateNo(j, k - 1) = ceil(Ans.chord{j, k-1}(1) / 12);
+            Ans.pitchNo{j, k - 1} = ~(ceil(mod(Ans.chord{j, k - 1}, 12) / 12)) * 12 + mod(Ans.chord{j, k - 1}, 12);
+            Ans.chordName{j, k - 1} = strcat(pitchName(Ans.pitchNo{j, k - 1}), ':', tempName(Ans.templateNo(j, k - 1)));
+
+            evaluationIdx = evaluationIdx + 1;
+            evaluationChord{evaluationIdx, 1} = j;
+            evaluationChord{evaluationIdx, 2} = segOnset(optimalPath(k - 1));
+            evaluationChord(evaluationIdx, 4) = Ans.chordName{j, k - 1};
+            evaluationChord{evaluationIdx, 5} = highScoreChord;
+
+
         end
-        
-        Ans.templateNo(j, k - 1) = ceil(Ans.chord{j, k-1}(1) / 12);
-        Ans.pitchNo{j, k - 1} = ~(ceil(mod(Ans.chord{j, k - 1}, 12) / 12)) * 12 + mod(Ans.chord{j, k - 1}, 12);
-        Ans.chordName{j, k - 1} = strcat(pitchName(Ans.pitchNo{j, k - 1}), ':', tempName(Ans.templateNo(j, k - 1)));
-        
-        evaluationIdx = evaluationIdx + 1;
-        evaluationChord{evaluationIdx, 1} = j;
-        evaluationChord{evaluationIdx, 2} = segOnset(optimalPath(k - 1));
-        evaluationChord(evaluationIdx, 4) = Ans.chordName{j, k - 1};
-        evaluationChord{evaluationIdx, 5} = highScoreChord;
-        
 
-    end
+                %%
+                %{
 
-            %%
-            %{
-            
-    % 算此小節的和弦在24調中 屬於該調的和弦數量
-    for key_i=1:24
-        ansBarChord = Ans.chord(j,:);
-        DIFF = numel(setdiff(ansBarChord(ansBarChord~=0),keyChord(key_i,:)));
-        num = numel(ansBarChord(ansBarChord~=0));
-        SCORE(j,key_i) = (num-DIFF)/num;
-%         if key_i==2 && j ==8
-%             setdiff(ansBarChord(ansBarChord~=0),keyChord(key_i,:))
-%             ansBarChord
-%             keyChord(key_i,:)
-%             DIFF
-%             num
-% 
-%         end
-    end
-    Cost          = [cellstr(keyName)' num2cell(SCORE(j,:))'];        
-    [~,s]         = sort(SCORE(j,:)*-1);                          % which cost to using to rank
-    Rank(:,:,j)   = [cellstr(keyName(s))' num2cell(SCORE(j,s))' num2cell(s)']; % rank, key name & cost in each bar
-    costRank(j,:) = cell2mat(reshape(Rank(:,2,j),[],1));          % ranked cost in each bar
-    nameRank(j,:) = cellstr (reshape(Rank(:,1,j),[],1))';         % ranked name in each bar
-    nameIdxRank(j,:) = cell2mat(reshape(Rank(:,3,j),[],1));  
-    costKey(j,:)  = SCORE(j,:);                                   % key cost    in each bar
+        % 算此小節的和弦在24調中 屬於該調的和弦數量
+        for key_i=1:24
+            ansBarChord = Ans.chord{j,:};
+            DIFF = numel(setdiff(ansBarChord(ansBarChord~=0),keyChord(key_i,:)));
+            num = numel(ansBarChord(ansBarChord~=0));
+            SCORE(j,key_i) = (num-DIFF)/num;
+    %         if key_i==2 && j ==8
+    %             setdiff(ansBarChord(ansBarChord~=0),keyChord(key_i,:))
+    %             ansBarChord
+    %             keyChord(key_i,:)
+    %             DIFF
+    %             num
+    % 
+    %         end
+        end
+        Cost          = [cellstr(keyName)' num2cell(SCORE(j,:))'];        
+        [~,s]         = sort(SCORE(j,:)*-1);                          % which cost to using to rank
+        Rank(:,:,j)   = [cellstr(keyName(s))' num2cell(SCORE(j,s))' num2cell(s)']; % rank, key name & cost in each bar
+        costRank(j,:) = cell2mat(reshape(Rank(:,2,j),[],1));          % ranked cost in each bar
+        nameRank(j,:) = cellstr (reshape(Rank(:,1,j),[],1))';         % ranked name in each bar
+        nameIdxRank(j,:) = cell2mat(reshape(Rank(:,3,j),[],1));  
+        costKey(j,:)  = SCORE(j,:);                                   % key cost    in each bar
 
-    TMPnameRank = nameRank(j,:);
-    TMPnameRank(costRank(j,:)==0) = [];
-    nameRank_v2(j,1:length(TMPnameRank)) = TMPnameRank;
-                
-    score_rank = sort(unique(costRank(j,:)),'descend');
-    if score_rank(1)~=0
         TMPnameRank = nameRank(j,:);
-        tmp = TMPnameRank(costRank(j,:)==score_rank(1));
-        nameRank1(j,1:length(tmp)) = tmp;
-        keyRank(j,1:24) = 0;
-        keyRank(j,SCORE(j,:)==score_rank(1)) = 1;
+        TMPnameRank(costRank(j,:)==0) = [];
+        nameRank_v2(j,1:length(TMPnameRank)) = TMPnameRank;
 
-        keyRatio(j,:) = keyConsistRatio(noteBar);               % new
-        keyRatioRank1(j,:) = keyRatio(j,:).*keyRank(j,:);       % new
-        keySortRatio(j,:) = keyRatioRank1(j,nameIdxRank(j,:));  % new
-        % 處理 把max留下來 其他不要
-        MAX = max(keySortRatio(j,:));
-        No1Idx = find(keySortRatio(j,:)==max(keySortRatio(j,:)));
-        FinalNo1(j,1:length(No1Idx)) = nameRank1(j,No1Idx);
-    end
-                
-    if length(score_rank)>=2
-        if score_rank(2)~=0
-%                         tmp = TMPnameRank(costRank(j,:)==score_rank(2));
-%                         nameRank2(j,1:length(tmp)) = tmp;
+        score_rank = sort(unique(costRank(j,:)),'descend');
+        if score_rank(1)~=0
+            TMPnameRank = nameRank(j,:);
+            tmp = TMPnameRank(costRank(j,:)==score_rank(1));
+            nameRank1(j,1:length(tmp)) = tmp;
+            keyRank(j,1:24) = 0;
+            keyRank(j,SCORE(j,:)==score_rank(1)) = 1;
 
-%                         keyRank(j,SCORE(j,:)==score_rank(2)) = 2;
+            keyRatio(j,:) = keyConsistRatio(noteBar);               % new
+            keyRatioRank1(j,:) = keyRatio(j,:).*keyRank(j,:);       % new
+            keySortRatio(j,:) = keyRatioRank1(j,nameIdxRank(j,:));  % new
+            % 處理 把max留下來 其他不要
+            MAX = max(keySortRatio(j,:));
+            No1Idx = find(keySortRatio(j,:)==max(keySortRatio(j,:)));
+            FinalNo1(j,1:length(No1Idx)) = nameRank1(j,No1Idx);
         end
-    end
-    %}
+
+        if length(score_rank)>=2
+            if score_rank(2)~=0
+    %                         tmp = TMPnameRank(costRank(j,:)==score_rank(2));
+    %                         nameRank2(j,1:length(tmp)) = tmp;
+
+    %                         keyRank(j,SCORE(j,:)==score_rank(2)) = 2;
+            end
+        end
+      %}
+    end 
 end
 
 if isSave
@@ -262,7 +258,9 @@ function [barNote, onsetBar] = bar_note_data(midiData, timeSig)
 
             if ~isempty(noteBar)
                 noteBar = sortrows(noteBar, 1);
-                noteBar = triDetection(noteBar); % tri 處理
+                noteBar = trill_detection(noteBar); % tri 處理
+                noteBar = normalize_midi_data(noteBar);
+
                 barNote{currentBar, 1} = noteBar;
             end
         end
@@ -297,14 +295,17 @@ end
 % output: pitchClass,  -> 每個minSeg有所有音，且weight為音符長度，大小為N*12 (N為minSeg數量,12為一個八度音的數量)
 %         lowestPitchClass -> 每個minSeg的最低音，且weight為音符長度，大小為N*12 (N為minSeg數量,12為一個八度音的數量)
 %         lowestP      -> 每個minSeg的最低音，且不以一個八度來看(不mod12)
-%         minSeg      -> 每個minSeg之onset offset的beat
+%         minSeg       -> 每個minSeg之onset offset的beat
 % 找左手最低音權重較大，難以分辨左右手，所以找片段最低音且同時有兩個音
 function [pitchClass, lowestPitchClass, lowestP, minSeg] = downbeat_pitchclass(noteBar, barOnset, isDownbeatWeight)
     beatInBar = noteBar(:,9);
     minSeg = [0:beatInBar-1; 1:beatInBar]'; % 以拍點為最小片段 (第 0 1 2 3 拍)
-
+%     minSeg = [0:0.5:beatInBar; 0:0.5:beatInBar]; % 以拍點為最小片段 (第 0 0.5 1 1.5 2 2.5 3 3.5 拍)
+%     minSeg([2,17])=[]; minSeg = reshape(minSeg,2,length(minSeg)/2)';
+    
     pitchClass = zeros(size(minSeg, 1), 12);
     lowestPitchClass = zeros(size(minSeg, 1), 12);
+
     lowestP = inf * ones(size(minSeg, 1), 1);
     
     for s = 1:size(minSeg, 1)
@@ -338,29 +339,64 @@ function [pitchClass, lowestPitchClass, lowestP, minSeg] = downbeat_pitchclass(n
 
                 [minPitch, idx] = min([noteLowestPitch(onUnitNum:offUnitNum) repPitch], [], 2);
                 noteNum(onUnitNum:offUnitNum) = noteNum(onUnitNum:offUnitNum) + 1;
+
                 if ~isempty(find(idx == 2, 1))
                     noteLowestIdx(find(idx == 2) + onUnitNum - 1) = n;
                     noteLowestPitch(onUnitNum:offUnitNum) = minPitch;
                 end
             end
             
-            % 找到片段內的最低音
-            if n == size(noteBar, 1) && ~isempty(find(noteNum > 1, 1))
-                lowestP(s) = min(noteLowestPitch(noteNum > 1));
-                idx = find(noteLowestPitch == lowestP(s));
-                lowestDur = numel(idx);
-                if isDownbeatWeight
-                    weight = 0;
-                    intSect = intersect(noteLowestIdx, find(isOnsetInt == 1));
-                    for inS = 1:length(intSect)
-                        weight = weight + numel(find(noteLowestIdx(idx) == intSect(inS)));
+            %% 兩個音同時，取C4以下的音
+            if n == size(noteBar, 1)
+                if ~isempty(find(noteNum == 2, 2)) %%  兩個音同時取最低音,c4以下
+                    lowestP(s) = min(noteLowestPitch(noteNum == 2));
+                    if lowestP(s) < 60
+                        idx = find(noteLowestPitch == lowestP(s)); %要改
+                        lowestDur = numel(idx);
+                        if isDownbeatWeight
+                            weight = 0;
+                            intSect = intersect(noteLowestIdx, find(isOnsetInt == 1));
+                            for inS = 1:length(intSect)
+                                weight = weight + numel(find(noteLowestIdx(idx) == intSect(inS)));
+                            end
+                            lowestDur = lowestDur + weight;
+                        end
+                        lowestPitchClass(s, mod(lowestP(s), 12) + 1) = lowestDur * unit;
                     end
-                    lowestDur = lowestDur + weight;
                 end
-                lowestPitchClass(s, mod(lowestP(s), 12) + 1) = lowestDur * unit;
+                if ~isempty(find(noteNum > 2, 2)) %%  三個音同時取最低音，優先
+                    lowestP(s) = min(noteLowestPitch(noteNum > 2));
+                    idx = find(noteLowestPitch == lowestP(s));
+                    lowestDur = numel(idx);
+                    if isDownbeatWeight
+                        weight = 0;
+                        intSect = intersect(noteLowestIdx, find(isOnsetInt == 1));
+                        for inS = 1:length(intSect)
+                            weight = weight + numel(find(noteLowestIdx(idx) == intSect(inS)));
+                        end
+                        lowestDur = lowestDur + weight;
+                    end
+                    lowestPitchClass(s, mod(lowestP(s), 12) + 1) = lowestDur * unit;
+                end 
             end
+            %%  兩個音同時取最低音
+%             if n == size(noteBar, 1) && ~isempty(find(noteNum > 1, 1))
+%                 lowestP(s) = min(noteLowestPitch(noteNum > 1));
+%                 idx = find(noteLowestPitch == lowestP(s));
+%                 lowestDur = numel(idx);
+%                 if isDownbeatWeight
+%                     weight = 0;
+%                     intSect = intersect(noteLowestIdx, find(isOnsetInt == 1));
+%                     for inS = 1:length(intSect)
+%                         weight = weight + numel(find(noteLowestIdx(idx) == intSect(inS)));
+%                     end
+%                     lowestDur = lowestDur + weight;
+%                 end
+%                 lowestPitchClass(s, mod(lowestP(s), 12) + 1) = lowestDur * unit;
+%             end
         end     
     end
+
     minSeg = minSeg + barOnset;
 end
 
