@@ -9,14 +9,14 @@
     filename = 'mz_545_1_noRepeat';%beethoven_string_quartet_135, mz_16_1 O48N2AOM quartet_16_3 dim7_1
     [midiINFO, timeSig]  = midi_Preprocess([filepath filename]);
 
-    midiINFO = normalize_midi_data(midiINFO);
+%     midiINFO = normalize_midi_data(midiINFO);
 
     addBeat = 0; addBar = 0; refNextBarRoot = 0;
 
     eva_i = 1;
     evaChord = {'小節','拍數(onset)','調性','和弦名稱','和弦編號','備註'};% new
 
-    isSave = 1;
+    isSave = 0;
     
     for i = 1:size(timeSig,1)
 
