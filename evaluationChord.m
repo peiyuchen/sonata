@@ -1,6 +1,7 @@
 clear; clc; close all;
+
 GTFile  = 'trans_chord_k545';
-evaFile = 'eva_mz_545_1_new_DB';
+evaFile = 'testBoth';
 timeSig = 4;    unit = 1;
 [number, text,  GTdata] = xlsread(['chordGT/' GTFile '.xlsx']);
 [number, text, EVAdata] = xlsread(['chordEva/' evaFile '.xlsx']);
@@ -11,10 +12,10 @@ timeSig = 4;    unit = 1;
 Ans = (GTarray-EVAarray==0);
 ans1 = sum(sum(GTarray-EVAarray==0))/(size(GTarray,1)*size(GTarray,2));
 
-% [GTarray ] = toArray( GTdata, unit/2, timeSig);
-% [EVAarray] = toArray(EVAdata, unit/2, timeSig);
-% 
-% ans2 = sum(sum(GTarray-EVAarray==0))/(size(GTarray,1)*size(GTarray,2));
+[GTarray ] = toArray( GTdata, unit/2, timeSig);
+[EVAarray] = toArray(EVAdata, unit/2, timeSig);
+
+ans2 = sum(sum(GTarray-EVAarray==0))/(size(GTarray,1)*size(GTarray,2));
 
 function [chordNo, chordName] = toArray(data, unit, timeSig)
     barNum      = data{end,1};
