@@ -6,17 +6,17 @@
     pitchName = {'C :','C#:','D :','D#:','E :','F :','F#:','G :','G#:','A :','A#:','B :'};
 
     filepath = '../midi/';
-    filename = 'mz_545_1_noRepeat';%beethoven_string_quartet_135, mz_16_1 O48N2AOM quartet_16_3 dim7_1
+    filename = 'm_7_cut';%beethoven_string_quartet_135, mz_16_1 O48N2AOM quartet_16_3 dim7_1
     [midiINFO, timeSig]  = midi_Preprocess([filepath filename]);
 
-%     midiINFO = normalize_midi_data(midiINFO);
+    midiINFO = normalize_midi_data(midiINFO);
 
     addBeat = 0; addBar = 0; refNextBarRoot = 0;
 
     eva_i = 1;
     evaChord = {'小節','拍數(onset)','調性','和弦名稱','和弦編號','備註'};% new
 
-    isSave = 0;
+    isSave = 1;
     
     for i = 1:size(timeSig,1)
 
@@ -52,7 +52,7 @@
             if ~isempty(noteBar)
 
                 noteBar       = sortrows(noteBar,1);      % 依據第一行排序 小到大
-                noteBar       = triDetection(noteBar);    % tri 處理
+                noteBar       = trill_detection(noteBar);    % tri 處理
 
     %% 找到最小片段分割點有哪些音
 

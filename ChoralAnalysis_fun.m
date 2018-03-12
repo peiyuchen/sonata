@@ -11,7 +11,7 @@ addpath('toolbox/midi_lib/midi_lib');
 
 % input midi data
 filePath = '../midi';
-fileName = 'mz_545_1_noRepeat';
+fileName = 'm_7_cut';%m_7_cut, mz_545_1_noRepeat
 [midiData, timeSig]  = midi_Preprocess(fileName);
 
 % each bar's information
@@ -35,9 +35,9 @@ evaluationChord = {'小節','拍數(onset)','調性','和弦名稱','和弦編號','備註'};% n
 
 %%%%%%%%%%% 加修改的方法 %%%%%%%%%%
 isDownbeatAndDurWeight      = 1;
-isLowWeight                 = 1;
+isLowWeight                 = 0;
 isDownbeatWeight            = 0;
-isSave                      = 1;
+isSave                      = 0;
 
 
 for j = 1:length(barNote)
@@ -215,11 +215,47 @@ end
 if isSave
     cell2csv(['chordEva/eva_' fileName '.csv'], evaluationChord);
 end
+%%
+clc
+GTFile  = 'trans_chord_k309_m1';%trans_chord_k309_m1, trans_chord_k545
+[number, text,  GTdata] = xlsread(['chordGT/' GTFile '.xlsx']);
+[score, keyRatio] = key_detection(evaluationChord, barNote);%evaluationChord
+finalScore = score.chordScoreNormalize .* keyRatio;
+
+function [score, keyRatio] = key_detection(evaluationChord, barNote)
+    keyName     = {'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B', ...
+                   'c', 'c#', 'd', 'd#', 'e', 'f', 'f#', 'g', 'g#', 'a', 'a#', 'b'};
+    evaluationChord(1, :) = [];
+    keyChord = make_key_chord;
+    for barI = 1:cell2mat(evaluationChord(end, 1))
+        barIdx = cell2mat(evaluationChord(:, 1)) == barI;
+        barChord = cell2mat(evaluationChord(barIdx, 5));
+        for keyI = 1:24
+            chordIntersect = intersect(barChord, keyChord(keyI, :));
+            chordScore = 0;
+            for c = 1:length(chordIntersect)
+                chordScore = chordScore + numel(find(barChord == chordIntersect(c)));
+            end
+            score.chordScoreSum(barI, keyI) = chordScore;
+            score.chordScoreNormalize(barI, keyI) = chordScore/numel(barChord);
+        end
+        keyRatio(barI, :) = keyConsistRatio(barNote{barI}); % 組成音
+        
+        finalScore = score.chordScoreNormalize(barI, :).* keyRatio(barI, :);
+        scoreSort = sort(unique(finalScore), 'descend');
+        if length(scoreSort) > 1 && scoreSort(1) ~= 0
+        chordNameNo1 = keyName(finalScore == scoreSort(1))';
+        score.chordNo1(1:length(chordNameNo1), barI) = chordNameNo1;
+        end
+        if length(scoreSort) > 2 && scoreSort(2) ~= 0
+            chordNameNo2 = keyName(finalScore == scoreSort(2))';
+            score.chordNo2(1:length(chordNameNo2), barI) = chordNameNo2;
+        end
+    end
+end
 
 
-
-
-%% 
+%%
 % description : 整理每個小節有哪些音，及音符資訊
 % input : mididata -> midi資訊
 %         timeSig  -> 拍號
@@ -359,7 +395,7 @@ function [pitchClass, lowestPitchClass, lowestP, minSeg] = downbeat_pitchclass(n
                             for inS = 1:length(intSect)
                                 weight = weight + numel(find(noteLowestIdx(idx) == intSect(inS)));
                             end
-                            lowestDur = lowestDur + weight;
+                            lowestDur = lowestDur + 0.5*weight;
                         end
                         lowestPitchClass(s, mod(lowestP(s), 12) + 1) = lowestDur * unit;
                     end
@@ -374,7 +410,7 @@ function [pitchClass, lowestPitchClass, lowestP, minSeg] = downbeat_pitchclass(n
                         for inS = 1:length(intSect)
                             weight = weight + numel(find(noteLowestIdx(idx) == intSect(inS)));
                         end
-                        lowestDur = lowestDur + weight;
+                        lowestDur = lowestDur + 0.5*weight;
                     end
                     lowestPitchClass(s, mod(lowestP(s), 12) + 1) = lowestDur * unit;
                 end 
@@ -479,9 +515,22 @@ function [keyRatio] = keyConsistRatio(note)
     pitchTabulate = tabulate(barPitch);
     pitchConsist(1:size(pitchTabulate, 1)) = pitchTabulate(:, 2);
     
-    for i=1:24
-        keyConsist(i, keyFusion(i).consistNumber + 1) = 1;
-        keyRatio(i) = sum(keyConsist(i,:) .* pitchConsist) / size(note, 1);
-    end
-
+%     for i=1:24
+%         keyConsist(i, keyFusion(i).consistNumber(:) + 1) = 1;
+%         keyRatio(i) = sum(keyConsist(i,:) .* pitchConsist) / size(note, 1);
+%     end
+    %% new
+    MAX = 0;
+     for k=1:24
+         note1 = note; 
+         for j=1:7
+             note1(mod(note1(:,4),12)==keyFusion(k).consistNumber(j),:)=[];
+         end
+         keyRatio(k) = (size(note,1) - length(unique(note1(:,4))))/size(note,1);
+%          keyRatio(k) = size(note1,1);
+%          keyRatio(k) = length(unique(note1(:,4)));
+%          MAX = max(MAX, keyRatio(k));
+%                  barBARbar{i,k} = note1{i,1};
+     end
+%     keyRatio = (MAX-keyRatio)/MAX;
 end

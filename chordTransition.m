@@ -64,7 +64,7 @@ KEYH        = cat(1,keyH(:).consistNote);
 KEYF        = cat(1,keyFusion(:).consistNote);
 
 %% 
-xlsFile = 'chord_k545';
+xlsFile = 'chord_k309_m1';
 [number, text, rawData] = xlsread(['chordGT/' xlsFile '.xlsx']);
 scale   = {'I', 'II', 'III','IV', 'V', 'VI', 'VII','V7','viio','iio'};
 degree  = [  1,    2,     3,   4,   5,    6,     7,   5,    7 ,    2, ]; 
@@ -110,7 +110,6 @@ for i=2:length(rawData)
     if ~isempty(de) && de == 7 && pNo>12         % 如果是VII代表用自然小調音階
         newChord{i,4} = KEYN(pNo, Pde);
     end
-    
     newChord{i,5} = find(strcmpi(newChord{i,4}, pitchName))-1;
     
     % 拿坡里和弦＆德國六和弦
